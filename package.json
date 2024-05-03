@@ -2,14 +2,31 @@
   "name": "lrhpack",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "ts-node test/debugger.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "typescript": "^5.4.5"
+    "@types/babel__generator": "^7.6.8",
+    "@types/babel__traverse": "^7.20.5",
+    "@types/node": "^20.12.8",
+    "@types/tapable": "^2.2.7",
+    "@types/webpack": "^5.28.5",
+    "ts-loader": "^9.5.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5",
+    "webpack": "^5.91.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "@babel/generator": "^7.24.5",
+    "@babel/parser": "^7.24.5",
+    "@babel/traverse": "^7.24.5",
+    "@babel/types": "^7.24.5",
+    "tapable": "^2.2.1"
   }
 }
