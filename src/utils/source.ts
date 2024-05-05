@@ -1,10 +1,10 @@
 //生成运行时代码
-function getSource(chunk) {
+export function getSource(chunk: Chunk) {
   return `
     (() => {
      var modules = {
        ${chunk.modules.map(
-         (module) => `
+         (module: Module) => `
          "${module.id}": (module) => {
            ${module._source}
          }
