@@ -46,16 +46,17 @@ export function transformTSSource(
     const code = transformRes?.code ?? "";
     // 正则表达式，匹配 require 语句中的路径字符串
     const regex = /require\(['"](.+?)['"]\)/;
-
-    // 使用正则表达式匹配路径字符串
-    const match = code.match(regex);
-
-    if (match) {
-      const pathString = match[1]; // 获取匹配到的路径字符串
+    code.replace(regex, (match, pathString) => {
+      // 这里的回调函数会对每个匹配项调用一次
+      // match 是整个匹配项
+      // pathString 是匹配项中的路径字符串
+      // 您可以在这里对路径字符串进行处理，并返回替换后的内容
       console.log("路径字符串:", pathString);
-    } else {
-      console.log("未找到路径字符串");
-    }
+      const baseName = path.basename(pathString);
+      const changeName = path.dirname(modulePath + "/" + baseName);
+      return `require("${changeName}")`; // 示例：将路径字符串转换为大写
+    });
+    return code;
   }
 
   return "";

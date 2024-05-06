@@ -1,10 +1,8 @@
 import traverse from "@babel/traverse";
-import { transform } from "@babel/core";
 import path from "path";
 import fs from "fs";
 
 import * as parser from "@babel/parser";
-import types, { StringLiteral } from "@babel/types";
 import generator from "@babel/generator";
 import { toUnixPath, tryExtensions } from "./utils/path";
 import { getSource, transformTSSource } from "./utils/source";
@@ -51,7 +49,7 @@ export default class Compilation {
       let entryModule = this.buildModule(entryName, entryFilePath);
       entryModule._source = transformTSSource(
         entryModule._source,
-        entryModule.id
+        "./" + path.posix.relative(baseDir, entryFilePath)
       );
       //6.3 将生成的入口文件 `module` 对象 push 进 `this.modules` 中
       // this.modules.push(entryModule);
