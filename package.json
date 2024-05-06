@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "test": "ts-node test/debugger.ts && node dist/main.js",
+    "build": "ts-node test/debugger.ts",
+    "test": "node dist/main.js",
     "standard": "ts-node test/debuggerUseWebpack.ts && node test_dist/main.js"
   },
   "keywords": [],
