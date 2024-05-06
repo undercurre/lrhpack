@@ -1,7 +1,7 @@
-import webpack from "../src/index";
-import webpackOptions from "../lrhpack.config";
+import lrhpack from "../src/index";
+import lrhpackOptions from "../lrhpack.config";
 
-const compiler = webpack(webpackOptions);
+const compiler = lrhpack(lrhpackOptions);
 
 //开始编译
 compiler.run((err, stats) => {

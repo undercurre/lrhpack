@@ -3,9 +3,9 @@ import * as webpack from "webpack";
 
 const config: webpack.Configuration = {
   mode: "development", //防止代码被压缩
-  entry: "./src/index.ts", //入口文件
+  entry: "./resource/index.ts", //入口文件
   output: {
-    path: path.resolve(__dirname, "dist"),
+    path: path.resolve(__dirname, "test_dist"),
     filename: "[name].js",
   },
   module: {

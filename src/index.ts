@@ -46,12 +46,12 @@ class Compiler {
         warnings: [],
         assetsByChunkName: {},
         assets: {},
-        modules: {},
-        chunks: {},
+        modules: [],
+        chunks: [],
         entrypoints: {},
         reasons: {},
         usedExports: {},
-        providedExports: {}
+        providedExports: {},
       });
       // 实现 watch 模式
       fileDependencies.forEach((fileDependencie: string) => {

@@ -1,37 +1,33 @@
 import traverse from "@babel/traverse";
+import { transform } from "@babel/core";
 import path from "path";
 import fs from "fs";
 
-import parser from "@babel/parser";
+import * as parser from "@babel/parser";
 import types, { StringLiteral } from "@babel/types";
 import generator from "@babel/generator";
 import { toUnixPath, tryExtensions } from "./utils/path";
-import { getSource } from "./utils/source";
+import { getSource, transformTSSource } from "./utils/source";
 
 const baseDir = toUnixPath(process.cwd()); //获取工作目录，在哪里执行命令就获取哪里的目录，这里获取的也是跟操作系统有关系，要替换成/
 
 export default class Compilation {
   public options: Configuration;
-  public modules: any[]; //本次编译所有生成出来的模块
-  public chunks: any[]; //本次编译产出的所有代码块，入口模块和依赖的模块打包在一起为代码块
-  public assets: any; //本次编译产出的资源文件
+  public modules: Module[]; //本次编译所有生成出来的模块
+  public chunks: Chunk[]; //本次编译产出的所有代码块，入口模块和依赖的模块打包在一起为代码块
+  public assets: Asset; //本次编译产出的资源文件
   public fileDependencies: string[]; //本次打包涉及到的文件，这里主要是为了实现watch模式下监听文件的变化，文件发生变化后会重新编译
 
   constructor(option: Configuration) {
     this.options = option;
     this.modules = [];
     this.chunks = [];
-    this.assets = {};
+    this.assets = {} as Asset;
     this.fileDependencies = [];
   }
 
   build(
-    callback: (args: {
-      chunks: Chunk[];
-      modules: Module[];
-      assets: Asset[];
-      fileDependencies: string[];
-    }) => void
+    callback: (err: any, stats: Stats, fileDependencies: string[]) => void
   ) {
     //第五步：根据配置文件中的`entry`配置项找到所有的入口
     let entry: Configuration["entry"] | { main: string } = {};
@@ -53,8 +49,12 @@ export default class Compilation {
       this.fileDependencies.push(entryFilePath);
       //6.2 得到入口模块的的 `module` 对象 （里面放着该模块的路径、依赖模块、源代码等）
       let entryModule = this.buildModule(entryName, entryFilePath);
+      entryModule._source = transformTSSource(
+        entryModule._source,
+        entryModule.id
+      );
       //6.3 将生成的入口文件 `module` 对象 push 进 `this.modules` 中
-      this.modules.push(entryModule);
+      // this.modules.push(entryModule);
       //第八步：等所有模块都编译完成后，根据模块之间的依赖关系，组装代码块 `chunk`（一般来说，每个入口文件会对应一个代码块`chunk`，每个代码块`chunk`里面会放着本入口模块和它依赖的模块）
       let chunk = {
         name: entryName, //entryName="main" 代码块的名称
@@ -68,20 +68,38 @@ export default class Compilation {
           "[name]",
           chunk.name
         );
-        this.assets[filename] = getSource(chunk);
+        (this.assets as any)[filename] = getSource(chunk);
       });
     }
     // 这里开始做编译工作，编译成功执行callback
-    callback({
-      chunks: this.chunks,
-      modules: this.modules,
-      assets: this.assets,
-      fileDependencies: this.fileDependencies,
-    });
+    callback(
+      null,
+      {
+        chunks: this.chunks,
+        modules: this.modules,
+        assets: this.assets,
+        hash: "",
+        time: 0,
+        errors: [],
+        warnings: [],
+        assetsByChunkName: {},
+        entrypoints: {},
+        reasons: {},
+        usedExports: {},
+        providedExports: {},
+        toJson: function (options?: ToJsonOptions | undefined) {
+          throw new Error("Function not implemented.");
+        },
+      },
+      this.fileDependencies
+    );
   }
 
   //当编译模块的时候，name：这个模块是属于哪个代码块chunk的，modulePath：模块绝对路径
   buildModule(name: string, modulePath: string) {
+    console.log("modulePath", modulePath);
+    // 判断是否是ts
+    const isTypeScript = path.extname(modulePath) === ".ts";
     //6.2.1 读取模块内容，获取源代码
     let sourceCode = fs.readFileSync(modulePath, "utf8");
     //buildModule最终会返回一个modules模块对象，每个模块都会有一个id,id是相对于根目录的相对路径
@@ -114,27 +132,33 @@ export default class Compilation {
     //通过loader翻译后的内容一定得是js内容，因为最后得走我们babel-parse，只有js才能成编译AST
     //第七步：找出此模块所依赖的模块，再对依赖模块进行编译
     //7.1：先把源代码编译成 [AST](https://astexplorer.net/)
-    let ast = parser.parse(sourceCode, { sourceType: "module" });
+    let ast = parser.parse(sourceCode, {
+      sourceType: "module",
+      plugins: isTypeScript ? ["decorators-legacy", "typescript"] : [],
+    });
+
     traverse(ast, {
       CallExpression: ({ node }) => {
-        if (
-          node.callee.type === "Identifier" &&
-          node.callee.name === "require"
-        ) {
-          let depModuleName = (node.arguments[0] as StringLiteral).value; //获取依赖的模块
-          let dirname = path.posix.dirname(modulePath); //获取当前正在编译的模所在的目录
-          let depModulePath = path.posix.join(dirname, depModuleName); //获取依赖模块的绝对路径
-          let extensions = this.options.resolve?.extensions || [".js"]; //获取配置中的extensions
-          depModulePath = tryExtensions(depModulePath, extensions); //尝试添加后缀，找到一个真实在硬盘上存在的文件
-          //7.3：将依赖模块的绝对路径 push 到 `this.fileDependencie]
-          this.fileDependencies.push(depModulePath);
-          //7.4：生成依赖模块的`模块 id`
-          let depModuleId = "./" + path.posix.relative(baseDir, depModulePath);
-          //7.5：修改语法结构，把依赖的模块改为依赖`模块 id` require("./name")=>require("./src/name.js")
-          node.arguments = [types.stringLiteral(depModuleId)];
-          //7.6：将依赖模块的信息 push 到该模块的 `dependencies` 属性中
-          module.dependencies.push({ depModuleId, depModulePath });
-        }
+        console.log("traverse", node);
+        node.arguments.forEach((argument) => {
+          if (argument.type === "Identifier") {
+            let depModuleName = argument.name; //获取依赖的模块
+            let dirname = path.posix.dirname(modulePath); //获取当前正在编译的模所在的目录
+            let depModulePath = path.posix.join(dirname, depModuleName); //获取依赖模块的绝对路径
+            let extensions = this.options.resolve?.extensions || [".js"]; //获取配置中的extensions
+            depModulePath = tryExtensions(depModulePath, extensions); //尝试添加后缀，找到一个真实在硬盘上存在的文件
+            //7.3：将依赖模块的绝对路径 push 到 `this.fileDependencie]
+            this.fileDependencies.push(depModulePath);
+            //7.4：生成依赖模块的`模块 id`
+            let depModuleId =
+              "./" + path.posix.relative(baseDir, depModulePath);
+            console.log("foreach", depModuleId);
+            //7.5：修改语法结构，把依赖的模块改为依赖`模块 id` require("./name")=>require("./src/name.js")
+            // node.arguments = [types.stringLiteral(depModuleId)];
+            // //7.6：将依赖模块的信息 push 到该模块的 `dependencies` 属性中
+            module.dependencies.push({ depModuleId, depModulePath });
+          }
+        });
       },
     });
 
@@ -152,6 +176,7 @@ export default class Compilation {
       } else {
         //7.9：对依赖模块编译完成后得到依赖模块的 `module 对象`，push 到 `this.modules` 中
         let depModule = this.buildModule(name, depModulePath);
+        depModule._source = transformTSSource(depModule._source, depModuleId);
         this.modules.push(depModule);
       }
     });

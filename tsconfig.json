@@ -4,19 +4,24 @@
     "lib": ["ES2016"],
     "module": "commonjs",
     "typeRoots": ["./types", "./node_modules/@types"],
+    "types": ["node"],
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "moduleResolution": "Node",
+    "paths": {
+      "*": ["./types/*"]
+    },
+    "outDir": "dist"
   },
   "include": [
-    "resource/**/*.ts",
-    "resource/**/*.d.ts",
-    "./types/*.d.ts",
+    "resource/*.ts",
+    "types/*.d.ts",
     "src/**/*.ts",
     "src/**/*.d.ts",
-    "test/**/*.ts",
-    "test/**/*.d.ts",
+    "test/*.ts",
+    "test/*.d.ts",
     "lrhpack.config.ts"
   ]
 }
