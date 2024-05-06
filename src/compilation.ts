@@ -1,9 +1,9 @@
+import traverse from "@babel/traverse";
 import path from "path";
 import fs from "fs";
 
 import parser from "@babel/parser";
-import types from "@babel/types";
-import traverse from "@babel/traverse";
+import types, { StringLiteral } from "@babel/types";
 import generator from "@babel/generator";
 import { toUnixPath, tryExtensions } from "./utils/path";
 import { getSource } from "./utils/source";
@@ -91,7 +91,7 @@ export default class Compilation {
     let module = {
       id: moduleId,
       names: [name], //names设计成数组是因为代表的是此模块属于哪个代码块，可能属于多个代码块
-      dependencies: [], //它依赖的模块
+      dependencies: [] as { depModuleId: string; depModulePath: string }[], //它依赖的模块
       _source: "", //该模块的代码信息
     };
     //6.2.3 找到对应的 `Loader` 对源代码进行翻译和替换
@@ -115,27 +115,28 @@ export default class Compilation {
     //第七步：找出此模块所依赖的模块，再对依赖模块进行编译
     //7.1：先把源代码编译成 [AST](https://astexplorer.net/)
     let ast = parser.parse(sourceCode, { sourceType: "module" });
-    //  traverse(ast, {
-    //    CallExpression: (nodePath) => {
-    //      const { node } = nodePath;
-    //      //7.2：在 `AST` 中查找 `require` 语句，找出依赖的模块名称和绝对路径
-    //      if (node.callee.name === "require") {
-    //        let depModuleName =  node.arguments[0].value; //获取依赖的模块
-    //        let dirname = path.posix.dirname(modulePath); //获取当前正在编译的模所在的目录
-    //        let depModulePath = path.posix.join(dirname, depModuleName); //获取依赖模块的绝对路径
-    //        let extensions = this.options.resolve?.extensions || [ ".js" ]; //获取配置中的extensions
-    //        depModulePath = tryExtensions(depModulePath, extensions); //尝试添加后缀，找到一个真实在硬盘上存在的文件
-    //        //7.3：将依赖模块的绝对路径 push 到 `this.fileDependencies` 中
-    //        this.fileDependencies.push(depModulePath);
-    //        //7.4：生成依赖模块的`模块 id`
-    //        let depModuleId = "./"  path.posix.relative(baseDir, depModulePath);
-    //        //7.5：修改语法结构，把依赖的模块改为依赖`模块 id` require("./name")=>require("./src/name.js")
-    //        node.arguments = [types.stringLiteral(depModuleId)];
-    //        //7.6：将依赖模块的信息 push 到该模块的 `dependencies` 属性中
-    //        module.dependencies.push({ depModuleId, depModulePath });
-    //      }
-    //    },
-    //  });
+    traverse(ast, {
+      CallExpression: ({ node }) => {
+        if (
+          node.callee.type === "Identifier" &&
+          node.callee.name === "require"
+        ) {
+          let depModuleName = (node.arguments[0] as StringLiteral).value; //获取依赖的模块
+          let dirname = path.posix.dirname(modulePath); //获取当前正在编译的模所在的目录
+          let depModulePath = path.posix.join(dirname, depModuleName); //获取依赖模块的绝对路径
+          let extensions = this.options.resolve?.extensions || [".js"]; //获取配置中的extensions
+          depModulePath = tryExtensions(depModulePath, extensions); //尝试添加后缀，找到一个真实在硬盘上存在的文件
+          //7.3：将依赖模块的绝对路径 push 到 `this.fileDependencie]
+          this.fileDependencies.push(depModulePath);
+          //7.4：生成依赖模块的`模块 id`
+          let depModuleId = "./" + path.posix.relative(baseDir, depModulePath);
+          //7.5：修改语法结构，把依赖的模块改为依赖`模块 id` require("./name")=>require("./src/name.js")
+          node.arguments = [types.stringLiteral(depModuleId)];
+          //7.6：将依赖模块的信息 push 到该模块的 `dependencies` 属性中
+          module.dependencies.push({ depModuleId, depModulePath });
+        }
+      },
+    });
 
     //7.7：生成新代码，并把转译后的源代码放到 `module._source` 属性上
     let { code } = generator(ast);
